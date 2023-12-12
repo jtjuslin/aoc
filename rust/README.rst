@@ -5,6 +5,7 @@ Advent of Code, Rust edition
 
 Here's some random notes:
 
+* Day 5 part 2 is really heavy to run. I'm probably missing something.
 * Do some additional tests to explore that front
 * Extract stuff to libraries shared by parts 1 and 2
 * .iter() vs .into_inter() what the heck? .collect()?
