@@ -1,4 +1,9 @@
-use day_05::{Almanac, parser::{parse_seeds, parse_mapper}};
+use std::ops::Range;
+
+use day_05::{
+    parser::{parse_mapper, parse_seeds},
+    Almanac, Mapper,
+};
 
 fn main() {
     let input = include_str!("../input1.txt");
@@ -6,35 +11,44 @@ fn main() {
     dbg!(output.unwrap());
 }
 
-fn parse(input: &str) -> Result<Almanac, String> {
+fn parse(input: &str) -> Result<Almanac, &str> {
     let mut lines = input.lines();
-    let mut almanac = match parse_seeds(
-        lines
-            .by_ref()
-            .take_while(|line| !line.is_empty())
-            .collect::<Vec<&str>>(),
-    ) {
-        Ok(ranges) if ranges.len() % 2 == 0 => Almanac::new(ranges
-            .chunks(2)
-            .map(|chunk| (chunk[0], chunk[0] + chunk[1]))
-            .collect()),
-        _ => return Err("Invalid seeds".to_string()),
-    };
+
+    let mut almanac = Almanac::new(
+        parse_seeds(
+            lines
+                .by_ref()
+                .take_while(|line| !line.is_empty())
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .next()
+                .ok_or("Cannot parse almanac: input is empty")?,
+        )?
+        .chunks(2)
+        .map(|chunk| Range {
+            start: chunk[0],
+            end: chunk[0] + chunk[1],
+        })
+        .collect(),
+    );
+
+    let mut order: u8 = 0;
     loop {
-        match parse_mapper(lines.by_ref().take_while(|line| !line.is_empty()).collect()) {
-            Ok(data) => match data {
-                Some((mapper_cat, mappers)) => almanac.set_mappers(mapper_cat, mappers),
-                None => break,
-            },
-            Err(err) => return Err(err),
+        match parse_mapper(lines.by_ref().take_while(|line| !line.is_empty()).collect())? {
+            Some((mapper_name, maps)) => {
+                almanac.add_mapper(Mapper::new(mapper_name.to_string(), order, maps));
+                order += 1;
+            }
+            None => break,
         };
     }
+
     Ok(almanac)
 }
 
 fn process(input: &str) -> Result<u64, String> {
     let almanac = parse(input)?;
-    Ok(almanac.closest_seed().1)
+    almanac.closest_loc()
 }
 
 #[cfg(test)]

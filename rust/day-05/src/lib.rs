@@ -1,110 +1,91 @@
-use std::u64::MAX;
+use itertools::Itertools;
+use std::{
+    cmp::{max, min},
+    ops::Range,
+};
 
 pub mod parser;
 
 #[derive(Debug)]
 pub struct Mapper {
-    trg_start: u64,
-    src_start: u64,
-    len: u64,
+    name: String,
+    order: u8,
+    maps: Vec<(Range<u64>, Range<u64>)>,
 }
 
 impl Mapper {
-    pub fn new(trg_start: u64, src_start: u64, len: u64) -> Mapper {
-        Mapper {
-            trg_start,
-            src_start,
-            len,
-        }
+    pub fn new(name: String, order: u8, maps: Vec<(Range<u64>, Range<u64>)>) -> Mapper {
+        Mapper { name, order, maps }
     }
 
-    fn map_value(&self, value: u64) -> Option<u64> {
-        if self.src_start <= value && value <= self.src_start + self.len {
-            return Some(self.trg_start + value - self.src_start);
+    fn map(&self, ranges: Vec<Range<u64>>) -> Vec<Range<u64>> {
+        let mut mapped: Vec<Range<u64>> = vec![];
+        let mut unmapped: Vec<Range<u64>> = ranges;
+        for (source, target) in self.maps.clone() {
+            unmapped = unmapped
+                .into_iter()
+                .map(|mut range| {
+                    let out_left = Range {
+                        start: range.start,
+                        end: min(range.end, source.start),
+                    };
+                    if !out_left.is_empty() {
+                        range.start = out_left.end;
+                    }
+                    let out_right = Range {
+                        start: max(range.start, source.end),
+                        end: range.end,
+                    };
+                    if !out_right.is_empty() {
+                        range.end = out_right.start;
+                    }
+                    if !range.is_empty() {
+                        mapped.push(Range {
+                            start: target.start + (range.start - source.start),
+                            end: target.end - (source.end - range.end),
+                        });
+                    }
+                    return vec![out_left, out_right];
+                })
+                .flatten()
+                .filter(|range| !range.is_empty())
+                .collect();
         }
-        None
+        mapped.extend(unmapped);
+        return mapped;
     }
 }
 
 #[derive(Debug)]
 pub struct Almanac {
-    seed_ranges: Vec<(u64, u64)>,
-    maps_seed_to_soil: Vec<Mapper>,
-    maps_soil_to_fertilizer: Vec<Mapper>,
-    maps_fertilizer_to_water: Vec<Mapper>,
-    maps_water_to_light: Vec<Mapper>,
-    maps_light_to_temperature: Vec<Mapper>,
-    maps_temperature_to_humidity: Vec<Mapper>,
-    maps_humidity_to_location: Vec<Mapper>,
+    seeds: Vec<Range<u64>>,
+    mappers: Vec<Mapper>,
 }
 
 impl Almanac {
-    pub fn new(seed_ranges: Vec<(u64, u64)>) -> Almanac {
+    pub fn new(seeds: Vec<Range<u64>>) -> Almanac {
         Almanac {
-            seed_ranges,
-            maps_seed_to_soil: vec![],
-            maps_soil_to_fertilizer: vec![],
-            maps_fertilizer_to_water: vec![],
-            maps_water_to_light: vec![],
-            maps_light_to_temperature: vec![],
-            maps_temperature_to_humidity: vec![],
-            maps_humidity_to_location: vec![],
+            seeds,
+            mappers: vec![],
         }
     }
 
-    pub fn set_mappers(&mut self, key: &str, mappers: Vec<Mapper>) {
-        match key {
-            "seed-to-soil map:" => self.maps_seed_to_soil = mappers,
-            "soil-to-fertilizer map:" => self.maps_soil_to_fertilizer = mappers,
-            "fertilizer-to-water map:" => self.maps_fertilizer_to_water = mappers,
-            "water-to-light map:" => self.maps_water_to_light = mappers,
-            "light-to-temperature map:" => self.maps_light_to_temperature = mappers,
-            "temperature-to-humidity map:" => self.maps_temperature_to_humidity = mappers,
-            "humidity-to-location map:" => self.maps_humidity_to_location = mappers,
-            _ => (),
-        }
+    pub fn add_mapper(&mut self, mapper: Mapper) {
+        self.mappers.push(mapper);
     }
 
-    pub fn map_seed(&self, seed: u64) -> (u64, u64) {
-        let mut mapped = (seed, seed);
-        for mapper_group in [
-            &self.maps_seed_to_soil,
-            &self.maps_soil_to_fertilizer,
-            &self.maps_fertilizer_to_water,
-            &self.maps_water_to_light,
-            &self.maps_light_to_temperature,
-            &self.maps_temperature_to_humidity,
-            &self.maps_humidity_to_location,
-        ]
-        .iter()
-        {
-            for mapper in *mapper_group {
-                match mapper.map_value(mapped.1) {
-                    Some(v) => {
-                        mapped.1 = v;
-                        break;
-                    }
-                    _ => continue,
-                }
-            }
-        }
-        mapped
-    }
-
-    pub fn closest_seed(&self) -> (u64, u64) {
-        let mut min: (u64, u64) = (0, MAX);
-        for seed in self
-            .seed_ranges
+    pub fn closest_loc(&self) -> Result<u64, String> {
+        match self
+            .mappers
             .iter()
-            .map(|seed_range| (seed_range.0..seed_range.1))
-            .flatten()
+            .sorted_by_key(|mapper| mapper.order)
+            .fold(self.seeds.clone(), |unmapped, mapper| mapper.map(unmapped))
+            .iter()
+            .sorted_by_key(|mapped| mapped.start)
+            .next()
         {
-            let mapped = self.map_seed(seed);
-            if mapped.1 < min.1 {
-                min = mapped;
-            }
+            Some(range) => Ok(range.start),
+            _ => Err("No seed was mapped.".to_string()),
         }
-        min
     }
 }
-
