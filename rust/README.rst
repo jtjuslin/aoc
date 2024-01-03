@@ -5,6 +5,8 @@ Advent of Code, Rust edition
 
 Here's some random notes:
 
+* Day 6 DONE...and its January already.
+  * Well...I did manage to bork my OS install by running updates and not having power plugged in. And not having my dotfiles under version control I lost over two weeks worth of freetime setting things up again. But yeah, gonna still finish! But before day 7, I'll put the dotfiles under control!
 * Day 5 part 2 is really heavy to run. I'm probably missing something.
   * I missed the fact that I could just map the range edges instead of every number in the range.
 * Do some additional tests to explore that front
